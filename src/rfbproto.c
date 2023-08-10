@@ -49,6 +49,7 @@
 #include <time.h>
 
 #include "crypto.h"
+#include "d3des.h"
 
 #include "sasl.h"
 #ifdef LIBVNCSERVER_HAVE_LZO
@@ -525,6 +526,7 @@ static rfbBool HandleVncAuth(rfbClient* client)
 {
 	uint8_t challenge[CHALLENGESIZE];
 	char* passwd = NULL;
+    unsigned char key[8];
 	int i;
 
 	if (!ReadFromRFBServer(client, (char*)challenge, CHALLENGESIZE))
@@ -541,13 +543,22 @@ static rfbBool HandleVncAuth(rfbClient* client)
 		passwd[8] = '\0';
 	}
 
-	rfbClientEncryptBytes(challenge, passwd);
+    /* key is simply password padded with nulls */
 
+    for (i = 0; i < 8; i++) {
+        key[i] = i < strlen(passwd) ? passwd[i] : 0;
+    }
 	/* Lose the password from memory */
 	for (i = strlen(passwd); i >= 0; i--) {
 		passwd[i] = '\0';
 	}
 	free(passwd);
+
+    deskey(key, EN0);
+    for (int j = 0; j < CHALLENGESIZE; j += 8) {
+        des(challenge + j, challenge + j);
+    }
+
 
 	if (!WriteToRFBServer(client, (char*)challenge, CHALLENGESIZE))
 		return FALSE;
